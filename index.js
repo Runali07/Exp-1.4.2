@@ -1,42 +1,81 @@
+require("dotenv").config();
 const express = require("express");
-const app =express();
+const mongoose = require("mongoose");
+const app = express();
 app.use(express.json());
-let cards=[];
-let idCounter=1;
-app.post("/cards",(req,res)=>{
- const card={
-  id:idCounter++,
-  suit:req.body.suit,
-  rank:req.body.rank
- };
- cards.push(card);
- res.status(201).json(card);
-  });
-  app.get("/cards",(req,res)=>{
-   res.json(cards);
-  });
-  app.get("/cards/:id",(req,res)=>{
-    const card=cards.find(c=>c.id==req.params.id);
-    if(!card)
-      return res.status(404).json({message:"Card not found"});
-    res.json(card);
-  });
-  app.put("/cards/:id", (req, res) => {
-    const card = cards.find(c => c.id == req.params.id);
+mongoose
+  .connect(process.env.MONGO_URL)
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.log(err));
+const cardSchema = new mongoose.Schema({
+  suit: {
+    type: String,
+    required: true
+  },
+  rank: {
+    type: String,
+    required: true
+  }
+});
+const Card = mongoose.model("Card", cardSchema);
+app.post("/cards", async (req, res) => {
+  try {
+    const card = new Card({
+      suit: req.body.suit,
+      rank: req.body.rank
+    });
+    const savedCard = await card.save();
+    res.status(201).json(savedCard);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+app.get("/cards", async (req, res) => {
+  try {
+    const cards = await Card.find();
+    res.json(cards);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+app.get("/cards/:id", async (req, res) => {
+  try {
+    const card = await Card.findById(req.params.id);
     if (!card)
-        return res.status(404).json({ message: "Card not found" });
-    card.suit = req.body.suit;
-    card.rank = req.body.rank;
+      return res.status(404).json({ message: "Card not found" });
     res.json(card);
+  } catch (error) {
+    res.status(400).json({ message: "Invalid ID" });
+  }
 });
-app.delete("/cards/:id", (req, res) => {
-    const index = cards.findIndex(c => c.id == req.params.id);
-    if (index === -1)
-        return res.status(404).json({ message: "Card not found" });
-    cards.splice(index, 1);
+app.put("/cards/:id", async (req, res) => {
+  try {
+    const card = await Card.findByIdAndUpdate(
+      req.params.id,
+      {
+        suit: req.body.suit,
+        rank: req.body.rank
+      },
+      { new: true }
+    );
+    if (!card)
+      return res.status(404).json({ message: "Card not found" });
+    res.json(card);
+  } catch (error) {
+    res.status(400).json({ message: "Invalid ID" });
+  }
+});
+app.delete("/cards/:id", async (req, res) => {
+  try {
+    const card = await Card.findByIdAndDelete(req.params.id);
+    if (!card)
+      return res.status(404).json({ message: "Card not found" });
     res.json({ message: "Card deleted" });
+  } catch (error) {
+    res.status(400).json({ message: "Invalid ID" });
+  }
 });
-
-app.listen(3000,()=>{
- console.log("Serving running on port 3000");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
 });
